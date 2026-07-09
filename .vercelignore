@@ -3,3 +3,4 @@ reminders.json
 sessions.json
 __pycache__/
 *.pyc
+.agents/

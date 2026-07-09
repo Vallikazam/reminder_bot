@@ -72,6 +72,10 @@ ALLOWED_USER_IDS = {
 }
 DATA_FILE = Path(os.getenv("REMINDERS_FILE", "reminders.json"))
 TIMEZONE = get_timezone()
+KV_REST_API_URL = os.getenv("KV_REST_API_URL") or os.getenv("UPSTASH_REDIS_REST_URL")
+KV_REST_API_TOKEN = os.getenv("KV_REST_API_TOKEN") or os.getenv("UPSTASH_REDIS_REST_TOKEN")
+REMINDERS_KEY = os.getenv("REMINDERS_KEY", "otbasy:reminders")
+SESSIONS_KEY = os.getenv("SESSIONS_KEY", "otbasy:sessions")
 
 
 def api(method, data=None):
@@ -91,15 +95,105 @@ def api(method, data=None):
     return payload["result"]
 
 
+def kv_enabled():
+    return bool(KV_REST_API_URL and KV_REST_API_TOKEN)
+
+
+def kv_command(command):
+    request = urllib.request.Request(
+        KV_REST_API_URL.rstrip("/"),
+        data=json.dumps(command).encode("utf-8"),
+        method="POST",
+        headers={
+            "Authorization": f"Bearer {KV_REST_API_TOKEN}",
+            "Content-Type": "application/json",
+        },
+    )
+    with urllib.request.urlopen(request, timeout=API_TIMEOUT) as response:
+        payload = json.loads(response.read().decode("utf-8"))
+    if "error" in payload and payload["error"]:
+        raise RuntimeError(payload["error"])
+    return payload.get("result")
+
+
+def kv_get_json(key, default):
+    if not kv_enabled():
+        return default
+    value = kv_command(["GET", key])
+    if not value:
+        return default
+    return json.loads(value)
+
+
+def kv_set_json(key, value):
+    kv_command(["SET", key, json.dumps(value, ensure_ascii=False)])
+
+
+def encode_session_value(value):
+    if isinstance(value, datetime):
+        return {"__datetime__": value.isoformat()}
+    if isinstance(value, dict):
+        return {str(key): encode_session_value(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [encode_session_value(item) for item in value]
+    return value
+
+
+def decode_session_value(value):
+    if isinstance(value, dict):
+        if "__datetime__" in value:
+            return datetime.fromisoformat(value["__datetime__"])
+        return {key: decode_session_value(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [decode_session_value(item) for item in value]
+    return value
+
+
 def load_reminders():
+    if kv_enabled():
+        return kv_get_json(REMINDERS_KEY, [])
     if not DATA_FILE.exists():
         return []
     return json.loads(DATA_FILE.read_text(encoding="utf-8"))
 
 
 def save_reminders(reminders):
+    if kv_enabled():
+        kv_set_json(REMINDERS_KEY, reminders)
+        return
     DATA_FILE.write_text(
         json.dumps(reminders, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+
+
+def load_sessions():
+    if kv_enabled():
+        raw_sessions = kv_get_json(SESSIONS_KEY, {})
+    else:
+        session_file = Path(os.getenv("SESSIONS_FILE", "sessions.json"))
+        if not session_file.exists():
+            return {}
+        raw_sessions = json.loads(session_file.read_text(encoding="utf-8"))
+
+    return {
+        int(user_id): decode_session_value(session)
+        for user_id, session in raw_sessions.items()
+    }
+
+
+def save_sessions(value):
+    encoded = {
+        str(user_id): encode_session_value(session)
+        for user_id, session in value.items()
+    }
+    if kv_enabled():
+        kv_set_json(SESSIONS_KEY, encoded)
+        return
+
+    session_file = Path(os.getenv("SESSIONS_FILE", "sessions.json"))
+    session_file.write_text(
+        json.dumps(encoded, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
 
@@ -853,6 +947,8 @@ def send_due_reminders():
 
 def run():
     offset = 0
+    global sessions
+    sessions = load_sessions()
     print("Reminder bot is running...")
     while True:
         try:
@@ -864,6 +960,7 @@ def run():
                     handle_message(update["message"])
                 elif "callback_query" in update:
                     handle_callback(update["callback_query"])
+                save_sessions(sessions)
         except (urllib.error.URLError, TimeoutError) as error:
             print("Network error:", error)
             time.sleep(5)

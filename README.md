@@ -23,6 +23,94 @@ $env:BOT_UTC_OFFSET="+05:00"
 python bot.py
 ```
 
+## Деплой на Vercel
+
+На Vercel бот работает через webhook, а не через бесконечный `python bot.py`.
+В проект добавлены:
+
+- `api/webhook.py` - принимает обновления от Telegram
+- `api/cron.py` - проверяет и отправляет наступившие напоминания
+- `vercel.json` - запускает cron каждые 5 минут
+- KV/Upstash Redis storage - хранит напоминания и шаги создания/редактирования
+
+### Что нужно от вас
+
+1. `TELEGRAM_BOT_TOKEN` - токен из `@BotFather`.
+2. `ALLOWED_USER_IDS` - Telegram ID разрешенных пользователей через запятую.
+3. `TELEGRAM_WEBHOOK_SECRET` - любая случайная строка, например `my_secret_2026`.
+4. `CRON_SECRET` - любая другая случайная строка для защиты `/api/cron`.
+5. `KV_REST_API_URL` и `KV_REST_API_TOKEN` - из Vercel KV или Upstash Redis.
+
+Без KV/Upstash на Vercel напоминания не будут надежно сохраняться, потому что файловая система serverless-функций не подходит для постоянной базы.
+
+### Как подключить KV в Vercel
+
+1. Откройте проект в Vercel.
+2. Перейдите в `Storage`.
+3. Создайте `KV` database или подключите Upstash Redis.
+4. Скопируйте переменные:
+   - `KV_REST_API_URL`
+   - `KV_REST_API_TOKEN`
+5. Добавьте их в `Settings` -> `Environment Variables`.
+
+### Environment Variables в Vercel
+
+Добавьте в `Settings` -> `Environment Variables`:
+
+```env
+TELEGRAM_BOT_TOKEN=ваш_токен_бота
+TELEGRAM_WEBHOOK_SECRET=случайный_секрет
+CRON_SECRET=случайный_секрет_для_cron
+VERCEL_APP_URL=https://your-project.vercel.app
+ALLOWED_USER_IDS=111111111,222222222
+BOT_TIMEZONE=Asia/Qyzylorda
+BOT_UTC_OFFSET=+05:00
+KV_REST_API_URL=ваш_kv_rest_url
+KV_REST_API_TOKEN=ваш_kv_rest_token
+REMINDERS_KEY=otbasy:reminders
+SESSIONS_KEY=otbasy:sessions
+```
+
+### Деплой
+
+1. Загрузите проект в GitHub.
+2. В Vercel нажмите `Add New` -> `Project`.
+3. Выберите репозиторий.
+4. Добавьте переменные окружения.
+5. Нажмите `Deploy`.
+6. После деплоя получите URL проекта, например:
+
+```text
+https://your-project.vercel.app
+```
+
+### Подключить Telegram webhook
+
+После деплоя выполните в PowerShell, заменив значения:
+
+```powershell
+$token="TELEGRAM_BOT_TOKEN"
+$secret="TELEGRAM_WEBHOOK_SECRET"
+$url="https://your-project.vercel.app/api/webhook"
+
+Invoke-RestMethod -Uri "https://api.telegram.org/bot$token/setWebhook" `
+  -Method Post `
+  -Body @{
+    url=$url
+    secret_token=$secret
+    allowed_updates='["message","callback_query"]'
+    drop_pending_updates=$true
+  }
+```
+
+Проверка webhook:
+
+```powershell
+Invoke-RestMethod -Uri "https://api.telegram.org/bot$token/getWebhookInfo"
+```
+
+Если в ответе `url` равен вашему `/api/webhook`, бот подключен.
+
 ## Кнопки
 
 - `Создать напоминание` - запустить создание напоминания
