@@ -30,8 +30,10 @@ python bot.py
 
 - `api/webhook.py` - принимает обновления от Telegram
 - `api/cron.py` - проверяет и отправляет наступившие напоминания
-- `vercel.json` - запускает cron каждые 5 минут
+- `vercel.json` - настройки Vercel Functions
 - KV/Upstash Redis storage - хранит напоминания и шаги создания/редактирования
+
+На Vercel Hobby встроенный Vercel Cron доступен только для ежедневных запусков. Для напоминаний нужен запуск чаще, поэтому на Hobby используйте внешний cron-сервис, например cron-job.org, EasyCron, UptimeRobot или GitHub Actions, который будет дергать `/api/cron` каждые 5 минут.
 
 ### Что нужно от вас
 
@@ -110,6 +112,30 @@ Invoke-RestMethod -Uri "https://api.telegram.org/bot$token/getWebhookInfo"
 ```
 
 Если в ответе `url` равен вашему `/api/webhook`, бот подключен.
+
+### Запуск проверки напоминаний на Vercel Hobby
+
+Так как Hobby не позволяет Vercel Cron чаще одного раза в день, настройте внешний HTTP cron:
+
+```text
+GET https://your-project.vercel.app/api/cron
+```
+
+Добавьте один из заголовков:
+
+```text
+Authorization: Bearer ваш_CRON_SECRET
+```
+
+или:
+
+```text
+X-Cron-Secret: ваш_CRON_SECRET
+```
+
+Интервал поставьте `5 minutes`. Если сервис не умеет добавлять headers, можно временно убрать `CRON_SECRET` из Vercel env, но это хуже: endpoint `/api/cron` станет публичным.
+
+Если хотите использовать именно Vercel Cron, нужен платный план Vercel Pro или расписание не чаще одного раза в день, что для напоминаний обычно не подходит.
 
 ## Кнопки
 
