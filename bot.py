@@ -374,7 +374,7 @@ def show_list(chat_id, message_id=None):
     if not reminders:
         text = "Активных напоминаний пока нет."
         if message_id:
-            edit_message(chat_id, message_id, text)
+            edit_message(chat_id, message_id, text, main_keyboard())
         else:
             send_message(chat_id, text, main_keyboard())
         return
@@ -399,7 +399,7 @@ def show_edit_menu(chat_id, reminder_id, message_id=None):
     if not reminder:
         text = "Не нашел активное напоминание с таким ID."
         if message_id:
-            edit_message(chat_id, message_id, text)
+            edit_message(chat_id, message_id, text, main_keyboard())
         else:
             send_message(chat_id, text, main_keyboard())
         return
