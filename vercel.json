@@ -1,7 +1,17 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "rewrites": [
+    {
+      "source": "/api/webhook",
+      "destination": "/api?route=webhook"
+    },
+    {
+      "source": "/api/cron",
+      "destination": "/api?route=cron"
+    }
+  ],
   "functions": {
-    "api/*.py": {
+    "api/index.py": {
       "excludeFiles": "{.git/**,.agents/**,__pycache__/**,*.pyc,.env,reminders.json,sessions.json}"
     }
   }

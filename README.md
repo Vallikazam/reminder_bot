@@ -28,8 +28,7 @@ python bot.py
 На Vercel бот работает через webhook, а не через бесконечный `python bot.py`.
 В проект добавлены:
 
-- `api/webhook.py` - принимает обновления от Telegram
-- `api/cron.py` - проверяет и отправляет наступившие напоминания
+- `api/index.py` - принимает Telegram webhook и обрабатывает cron-запросы
 - `vercel.json` - настройки Vercel Functions
 - KV/Upstash Redis storage - хранит напоминания и шаги создания/редактирования
 
